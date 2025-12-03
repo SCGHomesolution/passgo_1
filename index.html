@@ -68,7 +68,7 @@
   </div>
 
   <script>
-    // ใส่ LIFF ID ของคุณ (ตัวเดียวกับใน URL liff.line.me/xxxx)
+    // LIFF ID ของคุณ (ตัวเดียวกับใน URL liff.line.me/xxxx)
     const LIFF_ID = "2008146540-QmE2gLgv";
 
     // Base URL ของ Glide app
@@ -89,37 +89,50 @@
           return;
         }
 
-        // 3) ดึง UDID (ใช้ sub จาก ID Token เป็นหลัก)
+        // 3) ดึงข้อมูลจาก ID Token
         let udid = "";
-
         const idToken = liff.getDecodedIDToken();
         if (idToken && idToken.sub) {
-          // แนะนำใช้ตัวนี้เป็น udid
-          udid = idToken.sub;
-        } else {
-          // fallback: ใช้ profile.userId (บางเคส)
-          const profile = await liff.getProfile();
-          udid = profile.userId || "";
+          udid = idToken.sub; // ใช้เป็น udid หลัก
         }
 
-        // 4) สร้าง URL ปลายทาง
+        // 4) ดึง profile เพื่อเอา name + imageprofile (+ fallback userId)
+        const profile = await liff.getProfile();
+        const name = profile.displayName || "";
+        const imageProfile = profile.pictureUrl || "";
+
+        // ถ้า udid ว่าง ให้ fallback เป็น profile.userId
+        if (!udid && profile.userId) {
+          udid = profile.userId;
+        }
+
+        // 5) สร้าง URL ปลายทาง พร้อม udid, name, imageprofile
         let redirectUrl = GLIDE_BASE_URL;
         try {
           const url = new URL(GLIDE_BASE_URL);
           if (udid) {
             url.searchParams.set("udid", udid);
           }
+          if (name) {
+            url.searchParams.set("name", name);
+          }
+          if (imageProfile) {
+            url.searchParams.set("imageprofile", imageProfile);
+          }
           redirectUrl = url.toString();
         } catch (e) {
-          // ถ้า new URL มีปัญหา ใช้แผน B
-          if (udid) {
-            redirectUrl = GLIDE_BASE_URL + "?udid=" + encodeURIComponent(udid);
-          }
+          // fallback กรณี new URL มีปัญหา
+          const params = new URLSearchParams();
+          if (udid) params.set("udid", udid);
+          if (name) params.set("name", name);
+          if (imageProfile) params.set("imageprofile", imageProfile);
+          const qs = params.toString();
+          redirectUrl = GLIDE_BASE_URL + (qs ? "?" + qs : "");
         }
 
         $message.textContent = "กำลังพาไปยัง Rakmao PassGo ...";
 
-        // 5) Redirect ไป Glide (ยังอยู่ใน in-app browser ของ LINE)
+        // 6) Redirect ไป Glide (ยังอยู่ใน in-app browser ของ LINE)
         window.location.replace(redirectUrl);
         // หรือใช้แบบนี้ก็ได้
         // liff.openWindow({ url: redirectUrl, external: false });
