@@ -6,6 +6,9 @@
   <title>Rakmao PassGo LIFF Redirect</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
+    /* โหลดฟอนต์ Prompt */
+    @import url('https://fonts.googleapis.com/css2?family=Prompt:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+
     * {
       box-sizing: border-box;
       margin: 0;
@@ -13,7 +16,7 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: "Prompt", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: #f4f4f4;
       min-height: 100vh;
       display: flex;
@@ -68,60 +71,46 @@
   </div>
 
   <script>
-    // LIFF ID ของคุณ (ตัวเดียวกับใน URL liff.line.me/xxxx)
     const LIFF_ID = "2008146540-QmE2gLgv";
-
-    // Base URL ของ Glide app
     const GLIDE_BASE_URL = "https://rakmao-passgo.glide.page";
+
+    let hasRetriedLogin = false;
 
     async function main() {
       const $message = document.getElementById("message");
       const $error = document.getElementById("error");
 
       try {
-        // 1) init LIFF
         await liff.init({ liffId: LIFF_ID });
 
-        // 2) ถ้ายังไม่ได้ login ให้พาไป login ก่อน
         if (!liff.isLoggedIn()) {
           $message.textContent = "กำลังพาไปหน้าเข้าสู่ระบบ LINE...";
-          liff.login(); // login เสร็จจะเด้งกลับมาหน้าเดิม
+          liff.login();
           return;
         }
 
-        // 3) ดึงข้อมูลจาก ID Token
         let udid = "";
         const idToken = liff.getDecodedIDToken();
         if (idToken && idToken.sub) {
-          udid = idToken.sub; // ใช้เป็น udid หลัก
+          udid = idToken.sub;
         }
 
-        // 4) ดึง profile เพื่อเอา name + imageprofile (+ fallback userId)
         const profile = await liff.getProfile();
         const name = profile.displayName || "";
         const imageProfile = profile.pictureUrl || "";
 
-        // ถ้า udid ว่าง ให้ fallback เป็น profile.userId
         if (!udid && profile.userId) {
           udid = profile.userId;
         }
 
-        // 5) สร้าง URL ปลายทาง พร้อม udid, name, imageprofile
         let redirectUrl = GLIDE_BASE_URL;
         try {
           const url = new URL(GLIDE_BASE_URL);
-          if (udid) {
-            url.searchParams.set("udid", udid);
-          }
-          if (name) {
-            url.searchParams.set("name", name);
-          }
-          if (imageProfile) {
-            url.searchParams.set("imageprofile", imageProfile);
-          }
+          if (udid) url.searchParams.set("udid", udid);
+          if (name) url.searchParams.set("name", name);
+          if (imageProfile) url.searchParams.set("imageprofile", imageProfile);
           redirectUrl = url.toString();
         } catch (e) {
-          // fallback กรณี new URL มีปัญหา
           const params = new URLSearchParams();
           if (udid) params.set("udid", udid);
           if (name) params.set("name", name);
@@ -131,16 +120,32 @@
         }
 
         $message.textContent = "กำลังพาไปยัง Rakmao PassGo ...";
-
-        // 6) Redirect ไป Glide (ยังอยู่ใน in-app browser ของ LINE)
         window.location.replace(redirectUrl);
-        // หรือใช้แบบนี้ก็ได้
-        // liff.openWindow({ url: redirectUrl, external: false });
 
       } catch (err) {
+        const $message = document.getElementById("message");
+        const $error = document.getElementById("error");
         console.error(err);
+
+        const errStr = String(err || "");
+
+        if (!hasRetriedLogin && errStr.toLowerCase().includes("access token expired")) {
+          hasRetriedLogin = true;
+          $message.textContent = "กำลังต่ออายุการเข้าสู่ระบบ LINE...";
+          $error.textContent = "";
+
+          try {
+            liff.logout();
+          } catch (e) {
+            console.warn("logout error", e);
+          }
+
+          liff.login();
+          return;
+        }
+
         $message.textContent = "ไม่สามารถดึงข้อมูลผู้ใช้จาก LIFF ได้";
-        $error.textContent = String(err);
+        $error.textContent = errStr;
       }
     }
 
